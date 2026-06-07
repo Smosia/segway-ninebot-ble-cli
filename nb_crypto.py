@@ -367,7 +367,7 @@ def generate_password(auth: bytes, time_ms: int | None = None) -> bytes:
 
 if __name__ == "__main__":
     # Test key derivation
-    key = derive_key(b"S1DCA2138J0076", None)
+    key = derive_key(b"TESTDEVICE0001", None)
     print(f"Key (btName, null): {key.hex()}")
 
     # Test JavaRandom with known seed
@@ -377,13 +377,13 @@ if __name__ == "__main__":
     # --- Gen3 (zeros ecb_input, backward compat) ---
     print("\n--- Gen3 non-SN (ecb_input=zeros) ---")
     ctx = NbCrypto()  # default: zeros
-    ctx.set_key(b"S1DCA2138J0076", None)
+    ctx.set_key(b"TESTDEVICE0001", None)
     plaintext = bytes([0x5A, 0xB5, 0x00, 0x3E, 0x04, 0x5B, 0x00])
     encrypted = ctx.encrypt(plaintext)
     print(f"Non-SN encrypted ({len(encrypted)} bytes): {encrypted.hex()}")
 
     ctx2 = NbCrypto()
-    ctx2.set_key(b"S1DCA2138J0076", None)
+    ctx2.set_key(b"TESTDEVICE0001", None)
     decrypted, rc = ctx2.decrypt(encrypted)
     print(f"Non-SN decrypted (rc={rc}): {decrypted.hex()}")
     assert decrypted == plaintext, "Gen3 non-SN round-trip failed!"
@@ -391,12 +391,12 @@ if __name__ == "__main__":
     # --- Gen2 (fw_data ecb_input) ---
     print("\n--- Gen2 non-SN (ecb_input=FW_DATA) ---")
     ctx_g2 = NbCrypto(ecb_input=FW_DATA[:16])
-    ctx_g2.set_key(b"S1DCA2138J0076", None)
+    ctx_g2.set_key(b"TESTDEVICE0001", None)
     enc_g2 = ctx_g2.encrypt(plaintext)
     print(f"Non-SN encrypted ({len(enc_g2)} bytes): {enc_g2.hex()}")
 
     ctx_g2d = NbCrypto(ecb_input=FW_DATA[:16])
-    ctx_g2d.set_key(b"S1DCA2138J0076", None)
+    ctx_g2d.set_key(b"TESTDEVICE0001", None)
     dec_g2, rc_g2 = ctx_g2d.decrypt(enc_g2)
     print(f"Non-SN decrypted (rc={rc_g2}): {dec_g2.hex()}")
     assert dec_g2 == plaintext, "Gen2 non-SN round-trip failed!"
@@ -409,7 +409,7 @@ if __name__ == "__main__":
     print("\n--- SN-mode encrypt/decrypt ---")
     auth = bytes(range(16))
     ctx3 = NbCrypto()
-    ctx3.set_key(b"S1DCA2138J0076", auth)
+    ctx3.set_key(b"TESTDEVICE0001", auth)
     ctx3.set_auth_param(auth)
     ctx3.start_sn()
     pt = bytes([0x5A, 0xB5, 0x02, 0x3E, 0x04, 0x5C, 0x00, 0xAA, 0xBB])
@@ -417,7 +417,7 @@ if __name__ == "__main__":
     print(f"SN encrypted ({len(enc)} bytes): {enc.hex()}")
 
     ctx4 = NbCrypto()
-    ctx4.set_key(b"S1DCA2138J0076", auth)
+    ctx4.set_key(b"TESTDEVICE0001", auth)
     ctx4.set_auth_param(auth)
     ctx4.start_sn()
     dec, rc = ctx4.decrypt(enc)

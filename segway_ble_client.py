@@ -135,8 +135,15 @@ NORDIC_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 NORDIC_WRITE   = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
 NORDIC_NOTIFY  = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
-# Default device name (BLE key material)
-DEFAULT_BT_NAME = "S1DCA2138J0076"
+# Standard GATT "Device Name" characteristic (0x2A00). On Segway/Ninebot
+# scooters this returns the serial, which is the V2 encryption key (key1).
+# The name is read from the device itself so a foreign serial can never be used.
+GATT_DEVICE_NAME = "00002a00-0000-1000-8000-00805f9b34fb"
+
+# Ninebot/Segway manufacturer-specific advertisement IDs. The encrypt-protocol
+# version (2 = V2/supported, 3 = V3Auth/unsupported) is encoded in the payload.
+# bleak may report the company id in either byte order, so check both.
+NINEBOT_MFR_IDS = (20034, 20035, 16974, 16975)
 
 # Session file (gitignored — contains passwords and serial numbers)
 SESSION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".segway_session.json")
@@ -305,6 +312,21 @@ async def handshake(transport: BleTransport, crypto: NbCrypto,
     resp_enc = await transport.recv(timeout=5.0)
     resp_plain, rc = crypto.decrypt(resp_enc)
     log.info("PRE_COMM response (rc=%d): %s", rc, frame_hex(resp_plain))
+
+    # Segway/Ninebot devices echo the request back 1:1 when they reject it.
+    # That happens for two reasons, both of which we can't recover from here:
+    #   1) Wrong key — the device name we keyed with is not this scooter's serial.
+    #   2) The scooter uses V3Auth (Encryption3, newest models e.g. E300SE),
+    #      which this client does not implement.
+    if resp_plain == frame:
+        raise RuntimeError(
+            "Device echoed the PRE_COMM frame unchanged "
+            f"({frame_hex(resp_plain)}) — it rejected the handshake.\n"
+            f"  • Check the name: it must be this scooter's exact serial / "
+            f"advertised BLE name (it is the encryption key). We used "
+            f"'{bt_name}'. Run the 'scan' command and use that name.\n"
+            "  • If the name is correct, the scooter likely uses V3Auth "
+            "(newest models such as the E300SE), which is not supported.")
 
     resp = parse_frame(resp_plain)
     if resp is None or resp.cmd != CMD_PRE_COMM:
@@ -897,27 +919,66 @@ async def cmd_vehicle_action(transport: BleTransport, crypto: NbCrypto,
 # Scan
 # ---------------------------------------------------------------------------
 
+def detect_auth_version(manufacturer_data: dict[int, bytes] | None) -> int | None:
+    """
+    Best-effort: extract the encrypt-protocol version from Ninebot/Segway
+    manufacturer-specific advertisement data. Returns 2 (V2, supported),
+    3 (V3Auth, NOT supported), or None if it can't be determined.
+
+    Layout per the official app (ScanRecord): the version byte sits at payload
+    offset 1 for the primary manufacturer id and offset 2 for the secondary one.
+    Advisory only — never used to block a connection.
+    """
+    for cid, payload in (manufacturer_data or {}).items():
+        if cid in (20034, 16974) and len(payload) >= 2 and payload[1] in (2, 3):
+            return payload[1]
+        if cid in (20035, 16975) and len(payload) >= 3 and payload[2] in (2, 3):
+            return payload[2]
+    return None
+
+
+def _auth_tag(ver: int | None) -> str:
+    return {2: "authV2 (supported)",
+            3: "authV3 (NOT supported)"}.get(ver, "auth=? (unknown)")
+
+
+async def read_device_name(client: BleakClient) -> str | None:
+    """Read the GATT Device Name (0x2A00) — the serial used as the V2 key."""
+    try:
+        val = await client.read_gatt_char(GATT_DEVICE_NAME)
+        name = val.decode("ascii", errors="ignore").replace("\x00", "").strip()
+        return name or None
+    except Exception as e:  # noqa: BLE001 - advisory read, never fatal here
+        log.debug("Could not read GATT device name: %s", e)
+        return None
+
+
 async def do_scan(name_filter: str | None = None):
-    """Scan for Segway/Ninebot BLE devices."""
+    """Scan for Segway/Ninebot BLE devices and report their auth version."""
     print("Scanning for BLE devices (10 seconds)...")
-    devices = await BleakScanner.discover(timeout=10.0)
+    discovered = await BleakScanner.discover(timeout=10.0, return_adv=True)
 
     found = []
-    for d in devices:
-        name = d.name or ""
-        # Check for Ninebot/Segway names
+    for d, adv in discovered.values():
+        name = d.name or (adv.local_name if adv else "") or ""
+        mfr = (adv.manufacturer_data if adv else None) or {}
+        is_ninebot = (any(x in name.upper() for x in ["S1D", "NINEBOT", "SEGWAY", "NB-"])
+                      or any(cid in NINEBOT_MFR_IDS for cid in mfr))
         if name_filter and name_filter.lower() not in name.lower():
             continue
-        if any(x in name.upper() for x in ["S1D", "NINEBOT", "SEGWAY", "NB-"]):
+        if is_ninebot:
             found.append(d)
-            rssi = d.rssi if hasattr(d, "rssi") else "?"
-            print(f"  [{rssi:>4} dBm] {d.address}  {name}")
+            rssi = adv.rssi if adv else "?"
+            print(f"  [{rssi:>4} dBm] {d.address}  {name or '(unknown)'}  "
+                  f"[{_auth_tag(detect_auth_version(mfr))}]")
 
     if not found:
         print("\nNo matching devices found. Showing all nearby devices:")
-        for d in sorted(devices, key=lambda x: x.rssi if hasattr(x, "rssi") else -999, reverse=True)[:20]:
-            name = d.name or "(unknown)"
-            rssi = d.rssi if hasattr(d, "rssi") else "?"
+        ranked = sorted(discovered.values(),
+                        key=lambda da: da[1].rssi if da[1] else -999, reverse=True)
+        for d, adv in ranked[:20]:
+            name = d.name or (adv.local_name if adv else "") or "(unknown)"
+            rssi = adv.rssi if adv else "?"
             print(f"  [{rssi:>4} dBm] {d.address}  {name}")
 
     return found
@@ -993,6 +1054,18 @@ async def connect_and_run(args):
     print(f"Connecting to {address} ({gen.value})...")
     async with BleakClient(address, timeout=15.0) as client:
         print(f"Connected! MTU: {client.mtu_size}")
+
+        # The serial (GATT Device Name) IS the V2 encryption key. Read it from
+        # the device so we always key with the right scooter's serial. A wrong
+        # name produces a silently-rejected (echoed) handshake.
+        if not bt_name:
+            bt_name = await read_device_name(client)
+            if bt_name:
+                print(f"Device name (encryption key): {bt_name}")
+        if not bt_name:
+            print("Error: could not read the device name. Pass --name <serial> "
+                  "(the scooter's exact advertised name; see 'scan').")
+            return
 
         write_uuid, notify_uuid = await find_characteristics(client, gen=gen)
         transport = BleTransport(client, write_uuid, notify_uuid)
@@ -1107,8 +1180,10 @@ def main():
     )
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="Enable verbose logging")
-    parser.add_argument("-n", "--name", default=DEFAULT_BT_NAME,
-                        help=f"BLE device name (default: {DEFAULT_BT_NAME})")
+    parser.add_argument("-n", "--name", default=None,
+                        help="BLE device name = the scooter's serial (the V2 "
+                             "encryption key). Optional: if omitted it is read "
+                             "from the device's GATT Device Name (0x2A00).")
     parser.add_argument("-a", "--address", default=None,
                         help="BLE device MAC address (skip scan)")
     parser.add_argument("-g", "--gen", default="gen2", choices=["gen2", "gen3"],
@@ -1219,7 +1294,8 @@ def main():
 
     # Need an address for everything else
     if not args.address:
-        print(f"No address specified. Scanning for '{args.name}'...")
+        target = args.name if args.name else "Segway/Ninebot devices"
+        print(f"No address specified. Scanning for {target}...")
         devices = asyncio.run(do_scan(args.name))
         if not devices:
             print("No device found. Use -a ADDRESS to specify manually.")
