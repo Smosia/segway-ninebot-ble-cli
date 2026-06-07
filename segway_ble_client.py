@@ -351,12 +351,14 @@ async def handshake(transport: BleTransport, crypto: NbCrypto,
     password = None
     if stored_password:
         password = stored_password
-        log.info("  Using CLI-provided password: %s", password.hex())
+        log.info("  Using CLI-provided password (%d bytes)", len(password))
+        log.debug("  password=%s", password.hex())
     elif has_stored_pwd:
         session = load_session(mac)
         if session:
             password = bytes.fromhex(session["password"])
-            log.info("  Using stored password: %s", password.hex())
+            log.info("  Using stored password from session cache")
+            log.debug("  password=%s", password.hex())
 
     # ── Phase 2: SET_PWD (if needed) ───────────────────────────────
     if password is None and has_stored_pwd:
@@ -369,7 +371,8 @@ async def handshake(transport: BleTransport, crypto: NbCrypto,
         crypto.set_key(bt_name.encode(), auth)
 
         password = generate_password(auth)
-        log.info("  Generated password: %s", password.hex())
+        log.info("  Generated new password (%d bytes)", len(password))
+        log.debug("  password=%s", password.hex())
 
         frame = build_set_pwd(password, gen=gen)
         encrypted = crypto.encrypt(frame)
@@ -967,7 +970,9 @@ async def do_scan(name_filter: str | None = None):
         if name_filter and name_filter.lower() not in name.lower():
             continue
         if is_ninebot:
-            found.append(d)
+            # Keep the advertised name alongside the device — it is the serial
+            # (V2 key) and may come from adv.local_name when d.name is None.
+            found.append((d, name))
             rssi = adv.rssi if adv else "?"
             print(f"  [{rssi:>4} dBm] {d.address}  {name or '(unknown)'}  "
                   f"[{_auth_tag(detect_auth_version(mfr))}]")
@@ -1301,8 +1306,13 @@ def main():
             print("No device found. Use -a ADDRESS to specify manually.")
             sys.exit(1)
         if len(devices) == 1:
-            args.address = devices[0].address
-            print(f"Using: {args.address} ({devices[0].name})")
+            dev, dev_name = devices[0]
+            args.address = dev.address
+            # The advertised name is the serial (= V2 key); carry it through so
+            # we don't depend on a GATT name read that some devices refuse.
+            if not args.name:
+                args.name = dev_name
+            print(f"Using: {args.address} ({dev_name})")
         else:
             print("\nMultiple devices found. Use -a ADDRESS to specify.")
             sys.exit(1)
