@@ -8,6 +8,8 @@ reads/writes registers and sends vehicle actions.
 
 Usage:
     uv run segway_ble_client.py scan
+    uv run segway_ble_client.py --list-devices                # known board profiles
+    uv run segway_ble_client.py --device gt3 info             # non-E125S scooter
     uv run segway_ble_client.py info                          # dashboard poll
     uv run segway_ble_client.py read-speed
     uv run segway_ble_client.py set-speed 60
@@ -30,6 +32,7 @@ import time
 from bleak import BleakClient, BleakScanner
 from bleak.backends.device import BLEDevice
 
+import boards
 from nb_crypto import FW_DATA, NbCrypto, generate_password
 from nb_protocol import (
     BT_ID,
@@ -39,6 +42,7 @@ from nb_protocol import (
     BOARD_DIS,
     BOARD_MCU,
     BOARD_VCU,
+    set_boards,
     CMD_AUTH,
     CMD_PRE_COMM,
     CMD_READ_RESP,
@@ -1056,6 +1060,21 @@ async def connect_and_run(args):
     # Gen2 uses FW_DATA[:16] as ECB input for non-SN mode
     ecb_input = FW_DATA[:16] if gen == ProtocolGen.GEN2 else b"\x00" * 16
 
+    # Retarget board addresses for the selected model (default: E125S layout).
+    # Different scooters put vehicle-control on different boards — e.g. GT3/ZT3/G3
+    # use vcu=0x16, the E125S uses ecu=0x09.
+    if getattr(args, "device", None):
+        hw, entry = boards.find_device(args.device)
+        if not entry:
+            print(f"Unknown device '{args.device}'. Try --list-devices.")
+            return
+        roles = boards.resolve_roles(entry["modules"])
+        set_boards(roles)
+        print(f"Device profile: {boards.describe(entry, roles)}")
+    else:
+        print("Device profile: default Segway E125S layout — for other models pass "
+              "--device <model|hw-id> (e.g. --device gt3). See --list-devices.")
+
     print(f"Connecting to {address} ({gen.value})...")
     async with BleakClient(address, timeout=15.0) as client:
         print(f"Connected! MTU: {client.mtu_size}")
@@ -1193,6 +1212,12 @@ def main():
                         help="BLE device MAC address (skip scan)")
     parser.add_argument("-g", "--gen", default="gen2", choices=["gen2", "gen3"],
                         help="Protocol generation (default: gen2)")
+    parser.add_argument("-d", "--device", default=None,
+                        help="Device model for board addressing — name/slug or hardware "
+                             "id (e.g. 'gt3', 'segway-superscooter-gt3', '257'). "
+                             "Default is the E125S layout; see --list-devices.")
+    parser.add_argument("--list-devices", action="store_true",
+                        help="List known device board profiles and exit")
     parser.add_argument("--ident", default=None,
                         help="Vehicle ident hex string for power-on/off/open-seat")
     parser.add_argument("--password", default=None,
@@ -1270,6 +1295,16 @@ def main():
                          choices=["eco", "coast", "furious", "m1", "m2"])
 
     args = parser.parse_args()
+
+    if args.list_devices:
+        devs = boards.load_boards()
+        print(f"{len(devs)} device profiles (pass to --device by slug or hw-id):\n")
+        for hw, d in sorted(devs.items(), key=lambda kv: (kv[1].get("model") or "", kv[1].get("name") or "")):
+            vc = boards.resolve_roles(d["modules"]).get("vcu")
+            vcs = f"vcu→0x{vc:02X}" if vc is not None else "vcu→?"
+            print(f"  {(d.get('slug') or ''):44} hw={hw:>6}  {vcs:12} {d.get('name')}")
+        sys.exit(0)
+
     if not args.command:
         parser.print_help()
         sys.exit(1)

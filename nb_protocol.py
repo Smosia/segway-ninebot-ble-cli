@@ -143,6 +143,29 @@ BOARD_HEP = 0x28
 REG_HEP_LIGHT = 0x0E       # rHepLight/setHepLight
 
 
+# ---------------------------------------------------------------------------
+# Per-device board selection
+# ---------------------------------------------------------------------------
+# The board IDs above default to the Segway E125S layout. Other models put the
+# same logical function on different boards (e.g. vehicle-control is `ecu` 0x09
+# on the E125S but `vcu` 0x16 on the GT3/ZT3/G3). Call set_boards() with a
+# resolved {role: target} map (see boards.resolve_roles) to retarget the
+# builders for another model. Roles: dis, ble, vcu, mcu, bms1, bms2, hep.
+# Register *indices* are still E125S-tuned; boards.json only remaps the board.
+
+def set_boards(roles: dict) -> None:
+    """Override board targets for a specific device model. Missing roles keep
+    their E125S default. Builders read these module globals at call time."""
+    global BOARD_DIS, BOARD_BLE, BOARD_VCU, BOARD_MCU, BOARD_BMS1, BOARD_BMS2, BOARD_HEP
+    if roles.get("dis")  is not None: BOARD_DIS  = roles["dis"]
+    if roles.get("ble")  is not None: BOARD_BLE  = roles["ble"]
+    if roles.get("vcu")  is not None: BOARD_VCU  = roles["vcu"]
+    if roles.get("mcu")  is not None: BOARD_MCU  = roles["mcu"]
+    if roles.get("bms1") is not None: BOARD_BMS1 = roles["bms1"]
+    if roles.get("bms2") is not None: BOARD_BMS2 = roles["bms2"]
+    if roles.get("hep")  is not None: BOARD_HEP  = roles["hep"]
+
+
 @dataclass
 class NbFrame:
     """Parsed Ninebot frame (after decryption)."""

@@ -11,3 +11,12 @@ wheels/
 
 # Device session/credentials (passwords, serial numbers, idents)
 .segway_session.json
+
+# Local register dumps, sanitized exports and logs — may contain a device
+# serial / SIM ICCID; never commit these.
+dump_*.json
+dump_*.txt
+*_dump_sanitized.*
+*_comparison_comment.txt
+sweep_progress.log
+*.btsnoop

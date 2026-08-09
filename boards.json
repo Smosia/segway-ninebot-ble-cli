@@ -1,0 +1,847 @@
+{
+ "_comment": "Per-device BLE board (module) address maps from the app scan config. Module NAMES + numeric send/recv board IDs only -- NOT the proprietary command/register definitions. Lets the CLI target the right board per scooter (GT3 vehicle-control = vcu 0x16; E125S = ecu 0x09).",
+ "devices": {
+  "74": {
+   "name": "eallMountain",
+   "model": "other",
+   "slug": "eallmountain",
+   "modules": {
+    "ble": 48
+   }
+  },
+  "241": {
+   "name": "ulock",
+   "model": "other",
+   "slug": "ulock",
+   "modules": {
+    "ctrl": 1,
+    "ble": 241
+   }
+  },
+  "10752": {
+   "name": "Lumina-500",
+   "model": "cube",
+   "slug": "lumina-500",
+   "modules": {
+    "ble": 18,
+    "bms1": 65,
+    "bms2": 66,
+    "bms3": 67,
+    "bms4": 68,
+    "bms5": 69,
+    "invp": 22,
+    "invs": 17,
+    "pv": 21,
+    "mcu": 6
+   }
+  },
+  "132": {
+   "name": "segway_ct1",
+   "model": "scooter",
+   "slug": "segway-ct1",
+   "modules": {
+    "mcu": 32,
+    "ble": 33,
+    "bms": 7,
+    "dis": 35
+   }
+  },
+  "135": {
+   "name": "segway_st1_pro",
+   "model": "scooter",
+   "slug": "segway-st1-pro",
+   "modules": {
+    "mcu": 32,
+    "ble": 33,
+    "bms": 7,
+    "dis": 35
+   }
+  },
+  "1": {
+   "name": "nine",
+   "model": "other",
+   "slug": "nine",
+   "modules": {
+    "ctrl": 6,
+    "ahrs": 4,
+    "driver": 254,
+    "dboard": 7
+   }
+  },
+  "208": {
+   "name": "Segway Portable Power Station Cube",
+   "model": "cube",
+   "slug": "segway-portable-power-station-cube",
+   "modules": {
+    "ble": 18,
+    "mcu": 6,
+    "pv": 21,
+    "bms1": 65,
+    "bms2": 66,
+    "bms3": 67,
+    "bms4": 68,
+    "bms5": 69,
+    "invs": 17,
+    "invp": 22
+   }
+  },
+  "244": {
+   "name": "Segway-Ninebot Engine Speaker 2",
+   "model": "speaker",
+   "slug": "segway-ninebot-engine-speaker-2",
+   "modules": {
+    "ble": 29
+   }
+  },
+  "242": {
+   "name": "Ninebot Engine Speaker",
+   "model": "speaker",
+   "slug": "ninebot-engine-speaker",
+   "modules": {
+    "ble": 29
+   }
+  },
+  "52": {
+   "name": "Ninebot Mecha Kit",
+   "model": "armor",
+   "slug": "ninebot-mecha-kit",
+   "modules": {
+    "kit_ctrl": 26,
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12
+   }
+  },
+  "51": {
+   "name": "Ninebot Mecha Kit",
+   "model": "armor",
+   "slug": "ninebot-mecha-kit",
+   "modules": {
+    "kit_ctrl": 26,
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12
+   }
+  },
+  "3": {
+   "name": "Ninebot-S",
+   "model": "balance",
+   "slug": "ninebot-s",
+   "modules": {
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12
+   }
+  },
+  "18": {
+   "name": "Ninebot One Z",
+   "model": "unicycle",
+   "slug": "ninebot-one-z",
+   "modules": {
+    "ctrl": 20,
+    "ble": 22,
+    "bms": 17,
+    "bms2": 18,
+    "upc": 8
+   }
+  },
+  "19": {
+   "name": "Ninebot One A1",
+   "model": "unicycle",
+   "slug": "ninebot-one-a1",
+   "modules": {
+    "ctrl": 17,
+    "ble": 11,
+    "bms": 19,
+    "bms2": 20
+   }
+  },
+  "2": {
+   "name": "Ninebot One",
+   "model": "unicycle",
+   "slug": "ninebot-one",
+   "modules": {
+    "ctrl": 9
+   }
+  },
+  "123": {
+   "name": "Ninebot Kickscooter F",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-f",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "122": {
+   "name": "Ninebot Kickscooter UiFi 1 Pro",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-uifi-1-pro",
+   "modules": {
+    "dash": 1,
+    "ctrl": 32,
+    "bms": 7,
+    "ble": 33
+   }
+  },
+  "121": {
+   "name": "Ninebot Kickscooter UiFi 1",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-uifi-1",
+   "modules": {
+    "dash": 1,
+    "ctrl": 32,
+    "bms": 7,
+    "ble": 33
+   }
+  },
+  "115": {
+   "name": "Ninebot Kickscooter D38",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-d38",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "114": {
+   "name": "Ninebot Kickscooter D28",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-d28",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "116": {
+   "name": "Ninebot Kickscooter D18",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-d18",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "36": {
+   "name": "Ninebot KickScooter Max",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-max",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "33": {
+   "name": "Ninebot KickScooter ES",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-es",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34,
+    "bms2": 35
+   }
+  },
+  "35": {
+   "name": "Ninebot KickScooter Air",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-air",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34,
+    "bms2": 35
+   }
+  },
+  "17410": {
+   "name": "\u4e5d\u53f7\u5f15\u64ce\u97f3\u7bb1II",
+   "model": "speaker",
+   "slug": "ii",
+   "modules": {
+    "ble": 29
+   }
+  },
+  "124": {
+   "name": "Ninebot Kickscooter C2 Pro",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-c2-pro",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "125": {
+   "name": "Ninebot Kickscooter E2/E2 Plus",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-e2-e2-plus",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "120": {
+   "name": "Ninebot Kickscooter G65",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-g65",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "141": {
+   "name": "Ninebot eKickScooter E2 Pro",
+   "model": "scooter",
+   "slug": "ninebot-ekickscooter-e2-pro",
+   "modules": {
+    "mcu": 32,
+    "ble": 33,
+    "bms": 7
+   }
+  },
+  "45": {
+   "name": "Ninebot Kickscooter F65",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-f65",
+   "modules": {
+    "ble": 33,
+    "ctrl": 32,
+    "bms": 34
+   }
+  },
+  "119": {
+   "name": "Segway P100S",
+   "model": "scooter",
+   "slug": "segway-p100s",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34,
+    "dash": 35,
+    "nfc": 36
+   }
+  },
+  "118": {
+   "name": "Segway P65",
+   "model": "scooter",
+   "slug": "segway-p65",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34,
+    "dash": 35,
+    "nfc": 36
+   }
+  },
+  "113": {
+   "name": "Segway GT2",
+   "model": "scooter",
+   "slug": "segway-gt2",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34,
+    "dash": 35
+   }
+  },
+  "112": {
+   "name": "Segway GT1",
+   "model": "scooter",
+   "slug": "segway-gt1",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34,
+    "dash": 35
+   }
+  },
+  "136": {
+   "name": "Segway  ST2 Pro",
+   "model": "scooter",
+   "slug": "segway-st2-pro",
+   "modules": {
+    "mcu": 32,
+    "ble": 33,
+    "bms": 7,
+    "upc": 38
+   }
+  },
+  "26": {
+   "name": "Ninebot S-Max",
+   "model": "balance",
+   "slug": "ninebot-s-max",
+   "modules": {
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12
+   }
+  },
+  "24": {
+   "name": "Ninebot S-Max",
+   "model": "balance",
+   "slug": "ninebot-s-max",
+   "modules": {
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12
+   }
+  },
+  "30": {
+   "name": "Ninebot S 2",
+   "model": "balance",
+   "slug": "ninebot-s-2",
+   "modules": {
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12
+   }
+  },
+  "28": {
+   "name": "Ninebot S L",
+   "model": "balance",
+   "slug": "ninebot-s-l",
+   "modules": {
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12
+   }
+  },
+  "20": {
+   "name": "Ninebot S-Plus",
+   "model": "balance",
+   "slug": "ninebot-s-plus",
+   "modules": {
+    "ctrl": 4,
+    "ble": 6,
+    "bms": 7,
+    "crdb": 8,
+    "anchor": 9,
+    "tag": 10,
+    "gimbal": 12
+   }
+  },
+  "25": {
+   "name": "Ninebot S Nano",
+   "model": "balance",
+   "slug": "ninebot-s-nano",
+   "modules": {
+    "ctrl": 65,
+    "ble": 66,
+    "bms": 67
+   }
+  },
+  "27": {
+   "name": "Ninebot S Nano",
+   "model": "balance",
+   "slug": "ninebot-s-nano",
+   "modules": {
+    "ctrl": 65,
+    "ble": 66,
+    "bms": 67
+   }
+  },
+  "22": {
+   "name": "Segway miniLITE",
+   "model": "balance",
+   "slug": "segway-minilite",
+   "modules": {
+    "ctrl": 36,
+    "ble": 38,
+    "bms": 39
+   }
+  },
+  "48": {
+   "name": "Ninebot Gokart",
+   "model": "kart",
+   "slug": "ninebot-gokart",
+   "modules": {
+    "kit_ctrl": 26,
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12
+   }
+  },
+  "50": {
+   "name": "Ninebot Gokart Pro Automobili Lamborghini Edition",
+   "model": "kart",
+   "slug": "ninebot-gokart-pro-automobili-lamborghini-edition",
+   "modules": {
+    "kit_ctrl": 26,
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12,
+    "kit_kit": 26
+   }
+  },
+  "49": {
+   "name": "Ninebot Gokart Pro",
+   "model": "kart",
+   "slug": "ninebot-gokart-pro",
+   "modules": {
+    "kit_ctrl": 26,
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12,
+    "kit_kit": 26
+   }
+  },
+  "56": {
+   "name": "Segway Gokart Pro 2",
+   "model": "kart",
+   "slug": "segway-gokart-pro-2",
+   "modules": {
+    "kit_ctrl": 26,
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12,
+    "kit_dis": 49,
+    "kit_bot-s": 50,
+    "kit_rec": 51,
+    "kit_usb-s": 52,
+    "kit_kit": 26,
+    "mcu": 10
+   }
+  },
+  "57": {
+   "name": "Segway Gokart Kit 2",
+   "model": "kart",
+   "slug": "segway-gokart-kit-2",
+   "modules": {
+    "kit_ctrl": 26,
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12,
+    "kit_kit": 26,
+    "kit_dis": 49,
+    "kit_bot-s": 50,
+    "kit_rec": 51,
+    "kit_usb-s": 52,
+    "mcu": 10
+   }
+  },
+  "55": {
+   "name": "Segway Gokart Pro Optimus Prime Limited Edition",
+   "model": "kart",
+   "slug": "segway-gokart-pro-optimus-prime-limited-edition",
+   "modules": {
+    "kit_ctrl": 26,
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12,
+    "kit_kit": 26
+   }
+  },
+  "54": {
+   "name": "Segway Gokart Pro Bumblebee Limited Edition",
+   "model": "kart",
+   "slug": "segway-gokart-pro-bumblebee-limited-edition",
+   "modules": {
+    "kit_ctrl": 26,
+    "ctrl": 10,
+    "ble": 11,
+    "bms": 12,
+    "kit_kit": 26
+   }
+  },
+  "44": {
+   "name": "Ninebot Kickscooter F",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-f",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "129": {
+   "name": "Ninebot Kickscooter F2 Pro",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-f2-pro",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "127": {
+   "name": "Ninebot Kickscooter F2",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-f2",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "131": {
+   "name": "Ninebot Kickscooter MAX G2",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-max-g2",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "128": {
+   "name": "Ninebot Kickscooter F2 Plus",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-f2-plus",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34
+   }
+  },
+  "256": {
+   "name": "Segway ZT3 Pro",
+   "model": "scooter",
+   "slug": "segway-zt3-pro",
+   "modules": {
+    "mcu": 2,
+    "ble": 4,
+    "bms2": 6,
+    "bms1": 7,
+    "vcu": 22,
+    "tft": 35
+   }
+  },
+  "4102": {
+   "name": "SEGWAY E150S / SEGWAY E250S",
+   "model": "motor",
+   "slug": "segway-e150s-segway-e250s",
+   "modules": {
+    "dis": 1,
+    "mcu": 2,
+    "abs-f": 27,
+    "ble": 4,
+    "bms3": 5,
+    "bms2": 6,
+    "bms1": 7,
+    "ecu": 9,
+    "bfg": 16,
+    "hep": 17,
+    "chg": 32,
+    "abs-r": 28,
+    "tft": 35,
+    "shu3": 10,
+    "shu2": 11,
+    "shu1": 12,
+    "bms-ble1": 13,
+    "bms-ble2": 14,
+    "bms-ble3": 15,
+    "light": 21,
+    "swt-1": 19,
+    "swt-2": 20,
+    "dvr-f": 49,
+    "dvr-m": 50,
+    "dvr-r": 51,
+    "fl-apl": 34,
+    "gl-apl": 52,
+    "htg": 53
+   }
+  },
+  "66": {
+   "name": "Segway eScooter E",
+   "model": "motor",
+   "slug": "segway-escooter-e",
+   "modules": {
+    "ecu": 9,
+    "bms1": 7,
+    "bms2": 6,
+    "bms3": 5,
+    "mcu": 2,
+    "bfg": 16,
+    "dis": 1,
+    "ble": 4
+   }
+  },
+  "89": {
+   "name": "Segway eScooter N",
+   "model": "motor",
+   "slug": "segway-escooter-n",
+   "modules": {
+    "dis": 1,
+    "ecu": 9,
+    "bms1": 7,
+    "mcu": 2,
+    "bfg": 16,
+    "bms2": 6,
+    "bms3": 5,
+    "ble": 4
+   }
+  },
+  "67": {
+   "name": "Segway eMoped C",
+   "model": "motor",
+   "slug": "segway-emoped-c",
+   "modules": {
+    "dis": 1,
+    "ecu": 9,
+    "bms1": 7,
+    "mcu": 2,
+    "bfg": 16,
+    "ble": 4,
+    "bms": 7
+   }
+  },
+  "86": {
+   "name": "Segway eMoped B",
+   "model": "motor",
+   "slug": "segway-emoped-b",
+   "modules": {
+    "dis": 1,
+    "ecu": 9,
+    "bms1": 7,
+    "mcu": 2,
+    "bfg": 16,
+    "ble": 4,
+    "bms": 7
+   }
+  },
+  "73": {
+   "name": "Segway eMoped B",
+   "model": "motor",
+   "slug": "segway-emoped-b",
+   "modules": {
+    "dis": 1,
+    "ecu": 9,
+    "bms1": 7,
+    "mcu": 2,
+    "bfg": 16,
+    "ble": 4,
+    "bms": 7
+   }
+  },
+  "261": {
+   "name": "eKickScooter E3 Series",
+   "model": "scooter",
+   "slug": "ekickscooter-e3-series",
+   "modules": {
+    "mcu": 32,
+    "ble": 33,
+    "bms": 7,
+    "bms2": 6
+   }
+  },
+  "257": {
+   "name": "Segway SuperScooter GT3",
+   "model": "scooter",
+   "slug": "segway-superscooter-gt3",
+   "modules": {
+    "mcu": 2,
+    "ble": 4,
+    "bms2": 6,
+    "bms1": 7,
+    "vcu": 22,
+    "tft": 35
+   }
+  },
+  "258": {
+   "name": "Segway eKickscooter Ninebot MAX G3/MAX G3 Plus",
+   "model": "scooter",
+   "slug": "segway-ekickscooter-ninebot-max-g3-max-g3-plus",
+   "modules": {
+    "mcu": 2,
+    "ble": 4,
+    "bms2": 6,
+    "bms1": 7,
+    "vcu": 22,
+    "tft": 35
+   }
+  },
+  "259": {
+   "name": "eKickScooter F3",
+   "model": "scooter",
+   "slug": "ekickscooter-f3",
+   "modules": {
+    "mcu": 2,
+    "ble": 4,
+    "bms2": 6,
+    "bms1": 7,
+    "vcu": 22,
+    "tft": 35
+   }
+  },
+  "16640": {
+   "name": "Xafari",
+   "model": "assisted_ebike",
+   "slug": "xafari",
+   "modules": {
+    "ble": 4,
+    "mcu": 2,
+    "bms2": 6,
+    "bms1": 7,
+    "vcu": 22,
+    "t-box": 23,
+    "tft": 35
+   }
+  },
+  "17152": {
+   "name": "Segway Xyber",
+   "model": "assisted_ebike",
+   "slug": "segway-xyber",
+   "modules": {
+    "ble": 4,
+    "mcu": 2,
+    "bms2": 6,
+    "bms1": 7,
+    "vcu": 22,
+    "t-box": 23,
+    "tft": 35
+   }
+  },
+  "39": {
+   "name": "Ninebot KickScooter E",
+   "model": "scooter",
+   "slug": "ninebot-kickscooter-e",
+   "modules": {
+    "ctrl": 32,
+    "ble": 33,
+    "bms": 34,
+    "bms2": 35
+   }
+  },
+  "16384": {
+   "name": "Segway E-bike Myon",
+   "model": "assisted_ebike",
+   "slug": "segway-e-bike-myon",
+   "modules": {
+    "ble": 4,
+    "mcu": 2,
+    "bms2": 6,
+    "bms1": 7,
+    "vcu": 22,
+    "t-box": 23,
+    "tft": 35,
+    "radar-1": 24,
+    "tcu": 37,
+    "xdp": 55
+   }
+  },
+  "17153": {
+   "name": "Segway E-bike Muxi",
+   "model": "assisted_ebike",
+   "slug": "segway-e-bike-muxi",
+   "modules": {
+    "ble": 4,
+    "mcu": 2,
+    "bms2": 6,
+    "bms1": 7,
+    "vcu": 22,
+    "t-box": 23,
+    "tft": 35,
+    "radar-1": 24,
+    "tcu": 37,
+    "xdp": 55
+   }
+  }
+ }
+}
