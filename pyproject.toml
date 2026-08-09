@@ -1,8 +1,10 @@
 [project]
 name = "ble-client"
 version = "0.1.0"
-description = "Add your description here"
+description = "Reverse-engineered BLE client for Segway/Ninebot vehicles (Encryption2 protocol)"
 requires-python = ">=3.14"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 dependencies = [
     "bleak>=3.0.0",
     "pycryptodome>=3.23.0",
