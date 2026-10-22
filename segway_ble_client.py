@@ -229,6 +229,7 @@ class BleTransport:
             pass
 
     def _on_notify(self, _sender, data: bytearray):
+        log.debug("NOTIFY raw (%d): %s", len(data), bytes(data).hex())
         """Handle incoming BLE notification — reassemble frames."""
         self._rx_buffer.extend(data)
         self._try_extract_frame()
@@ -383,55 +384,120 @@ async def handshake(
         crypto.set_key(bt_name.encode(), auth)
 
         password = generate_password(auth)
-        log.info("  Generated new password (%d bytes)", len(password))
         log.debug("  password=%s", password.hex())
-
         frame = build_set_pwd(password, gen=gen)
-        encrypted = crypto.encrypt(frame)
-        await transport.send(encrypted)
 
-        resp_enc = await transport.recv(timeout=10.0)
-        resp_plain, rc = crypto.decrypt(resp_enc)
-        log.info("SET_PWD response (rc=%d): %s", rc, frame_hex(resp_plain))
+        deadline = time.monotonic() + 60
+        prompted = False
+        while True:
+            await transport.send(crypto.encrypt(frame))
+            resp = None
+            try:
+                resp_enc = await transport.recv(timeout=1.5)
+                resp_plain, rc = crypto.decrypt(resp_enc)
+                log.debug("SET_PWD resp (rc=%d): %s", rc, frame_hex(resp_plain))
+                resp = parse_frame(resp_plain)
+            except TimeoutError:
+                pass
 
-        resp = parse_frame(resp_plain)
-        if resp is None or resp.cmd != CMD_SET_PWD:
-            raise RuntimeError(f"Invalid SET_PWD response: {frame_hex(resp_plain)}")
+            if resp is not None and resp.cmd != CMD_SET_PWD:
+                raise RuntimeError(f"Invalid SET_PWD response: {frame_hex(resp_plain)}")
+            if resp is not None and resp.index == 1:
+                break
 
-        if resp.index == 0:
-            log.warning("  Device waiting for button press...")
-            # Wait longer for user interaction
-            resp_enc = await transport.recv(timeout=60.0)
-            resp_plain, rc = crypto.decrypt(resp_enc)
-            resp = parse_frame(resp_plain)
-            if resp is None or resp.index != 1:
-                raise RuntimeError("SET_PWD failed (button not pressed?)")
-
-        if resp.index != 1:
-            raise RuntimeError(f"SET_PWD rejected: index={resp.index}")
+            if not prompted:
+                print(">>> Нажмите кнопку питания на самокате")
+                prompted = True
+            if time.monotonic() > deadline:
+                raise RuntimeError("SET_PWD: кнопка не нажата за 60 с")
+            await asyncio.sleep(0.5)
 
         log.info("  Password accepted!")
+        print(f">>> password: {password.hex()}")
+        save_session(mac, password, sn, bt_name, gen=gen.value)
+    # if password is None:
+    # log.info("Phase 2: SET_PWD")
+    # crypto.set_key(bt_name.encode(), auth)
+
+    # password = generate_password(auth)
+    # log.info("  Generated new password (%d bytes)", len(password))
+    # log.debug("  password=%s", password.hex())
+
+    # frame = build_set_pwd(password, gen=gen)
+    # encrypted = crypto.encrypt(frame)
+    # await transport.send(encrypted)
+
+    # resp_enc = await transport.recv(timeout=10.0)
+    # resp_plain, rc = crypto.decrypt(resp_enc)
+    # log.info("SET_PWD response (rc=%d): %s", rc, frame_hex(resp_plain))
+
+    # resp = parse_frame(resp_plain)
+    # if resp is None or resp.cmd != CMD_SET_PWD:
+    #    raise RuntimeError(f"Invalid SET_PWD response: {frame_hex(resp_plain)}")
+
+    # if resp.index == 0:
+    #    log.warning("  Device waiting for button press...")
+    #    # Wait longer for user interaction
+    #    resp_enc = await transport.recv(timeout=60.0)
+    #    resp_plain, rc = crypto.decrypt(resp_enc)
+    #    resp = parse_frame(resp_plain)
+    #    if resp is None or resp.index != 1:
+    #        raise RuntimeError("SET_PWD failed (button not pressed?)")
+
+    # if resp.index != 1:
+    #    raise RuntimeError(f"SET_PWD rejected: index={resp.index}")
+
+    # log.info("  Password accepted!")
+
+    # ── Phase 3: AUTH ──────────────────────────────────────────────
+    # log.info("Phase 3: AUTH")
+    # crypto.set_key(password, auth)
+
+    # frame = build_auth(sn, gen=gen)
+    # encrypted = crypto.encrypt(frame)
+    # await transport.send(encrypted)
+
+    # resp_enc = await transport.recv(timeout=5.0)
+    # resp_plain, rc = crypto.decrypt(resp_enc)
+    # log.info("AUTH response (rc=%d): %s", rc, frame_hex(resp_plain))
+
+    # resp = parse_frame(resp_plain)
+    # if resp is None or resp.cmd != CMD_AUTH:
+    #    raise RuntimeError(f"Invalid AUTH response: {frame_hex(resp_plain)}")
+
+    # if resp.index != 1:
+    #    log.warning("AUTH failed (index=%d), clearing stored password", resp.index)
+    #    clear_session(mac)
+    #    raise RuntimeError(f"AUTH rejected: index={resp.index}")
 
     # ── Phase 3: AUTH ──────────────────────────────────────────────
     log.info("Phase 3: AUTH")
-    crypto.set_key(password, auth)
-
     frame = build_auth(sn, gen=gen)
-    encrypted = crypto.encrypt(frame)
-    await transport.send(encrypted)
+    resp = None
+    for label, k1, k2 in (
+        ("password+auth", password, auth),
+        ("name+auth", bt_name.encode(), auth),
+    ):
+        crypto.set_key(k1, k2)
+        await transport.send(crypto.encrypt(frame))
+        try:
+            resp_enc = await transport.recv(timeout=3.0)
+        except TimeoutError:
+            log.warning("  AUTH: no reply with key %s", label)
+            continue
+        resp_plain, rc = crypto.decrypt(resp_enc)
+        log.info("AUTH response [%s] (rc=%d): %s", label, rc, frame_hex(resp_plain))
+        resp = parse_frame(resp_plain)
+        break
 
-    resp_enc = await transport.recv(timeout=5.0)
-    resp_plain, rc = crypto.decrypt(resp_enc)
-    log.info("AUTH response (rc=%d): %s", rc, frame_hex(resp_plain))
-
-    resp = parse_frame(resp_plain)
     if resp is None or resp.cmd != CMD_AUTH:
-        raise RuntimeError(f"Invalid AUTH response: {frame_hex(resp_plain)}")
+        raise RuntimeError("AUTH: no valid response with either key")
 
     if resp.index != 1:
-        log.warning("AUTH failed (index=%d), clearing stored password", resp.index)
-        clear_session(mac)
         raise RuntimeError(f"AUTH rejected: index={resp.index}")
+
+    # ключ для дальнейшей сессии
+    crypto.set_key(password, auth)
 
     log.info("  Authenticated!")
     save_session(mac, password, sn, bt_name, gen=gen.value)
@@ -497,7 +563,7 @@ async def cmd_set_speed(
 
 
 async def send_and_recv(
-    transport: BleTransport, crypto: NbCrypto, frame: bytes, timeout: float = 5.0
+    transport: BleTransport, crypto: NbCrypto, frame: bytes, timeout: float = 1.5
 ) -> NbFrame | None:
     """Encrypt, send a frame and return the parsed decrypted response."""
     encrypted = crypto.encrypt(frame)
@@ -703,6 +769,83 @@ async def cmd_info(
         f"Versions:       DIS={fmt_version(dis_ver)}  MCU={fmt_version(mcu_ver)}  "
         f"BLE={fmt_version(ble_ver)}  ECU={fmt_version(ecu_ver)}  BMS={fmt_version(bms_ver)}"
     )
+
+
+async def cmd_info_ks(
+    transport: BleTransport, crypto: NbCrypto, gen: ProtocolGen = ProtocolGen.GEN2
+):
+    """Dashboard for Ninebot KickScooter (classic ESC 0x20 / BMS 0x22 map)."""
+
+    async def rd(target, reg, ln):
+        try:
+            return await read_register_bytes(
+                transport, crypto, build_read(target, reg, ln, gen=gen)
+            )
+        except (TimeoutError, RuntimeError) as e:
+            log.debug("read 0x%02X:0x%02X: %s", target, reg, e)
+            return None
+
+    def u16(b, o=0):
+        return struct.unpack_from("<H", b, o)[0] if b and len(b) >= o + 2 else None
+
+    def i16(b, o=0):
+        return struct.unpack_from("<h", b, o)[0] if b and len(b) >= o + 2 else None
+
+    def u32(b, o=0):
+        return struct.unpack_from("<I", b, o)[0] if b and len(b) >= o + 4 else None
+
+    def f(x, scale=1, unit="", nd=2):
+        return f"{x * scale:.{nd}f}{unit}" if x is not None else "?"
+
+    sn = await rd(0x20, 0x10, 14)
+    fw = await rd(0x20, 0x1A, 2)
+    rng = await rd(0x20, 0x25, 2)
+    dash = await rd(0x20, 0xB0, 32)
+    bv = await rd(0x22, 0x34, 2)
+    bi = await rd(0x22, 0x33, 2)  # ток, 0.01 A (не проверено)
+    bcap = await rd(0x22, 0x31, 2)  # остаток ёмкости, mAh (не проверено)
+    fcap = await rd(0x22, 0x18, 4)  # factory, full
+    cyc = await rd(0x22, 0x1B, 4)  # full cycles, charge count
+    temps = await rd(0x22, 0x35, 2)
+    hlth = await rd(0x22, 0x3B, 2)
+    cells = await rd(0x22, 0x40, 20)
+    uptm = await rd(0x20, 0x32, 4)
+
+    print(f"Serial:        {sn.decode('ascii', 'replace') if sn else '?'}")
+    print(f"ESC firmware:  {fmt_version(u16(fw))}")
+    if dash and len(dash) >= 24:
+        print(f"Error/Warning: 0x{u16(dash,0):04X} / 0x{u16(dash,2):04X}")
+        print(f"Flags:         0x{u16(dash,4):04X}")
+        print(f"Battery:       {u16(dash,8)} %")
+        print(f"Speed (raw):   {i16(dash,10)}")
+        print(f"Avg spd (raw): {u16(dash,12)}")
+        print(f"Odometer:      {f(u32(dash,14), 0.001, ' km', 1)}")
+        print(f"Trip:          {f(u16(dash,18), 0.001, ' km')}")
+        print(f"Ride time:     {u16(dash,20)} s")
+        print(f"Temp:          {f(u16(dash,22), 0.1, ' °C', 1)}")
+    print(f"Range left:    {f(u16(rng), 0.01, ' km')}")
+    print(f"BMS voltage:   {f(u16(bv), 0.01, ' V')}")
+    print(f"BMS current:   {f(i16(bi), 0.01, ' A')}")
+    print(f"BMS capacity:  {u16(bcap) if bcap else '?'} mAh")
+
+    if fcap:
+        print(f"Capacity:      {u16(fcap,0)} mAh factory / {u16(fcap,2)} mAh full")
+    if cyc:
+        print(f"Cycles:        {u16(cyc,0)} full / {u16(cyc,2)} charges")
+    if hlth:
+        print(f"Health:        {u16(hlth)} %")
+    if temps:
+        print(f"BMS temps:     {temps[0]-20} / {temps[1]-20} °C")
+    if uptm:
+        print(f"Power-on time: {u32(uptm)/3600:.1f} h")
+    if cells and len(cells) == 20:
+        mv = struct.unpack("<10H", cells)
+        print("Cells (mV):    " + " ".join(str(x) for x in mv))
+        lo, hi = min(mv), max(mv)
+        print(
+            f"Cell min/max:  {lo} (#{mv.index(lo)+1}) / {hi} (#{mv.index(hi)+1}), "
+            f"delta {hi-lo} mV"
+        )
 
 
 async def cmd_set_sound(
@@ -1269,6 +1412,9 @@ async def connect_and_run(args):
             elif args.command == "info":
                 await cmd_info(transport, crypto, gen=gen)
 
+            elif args.command == "info-ks":
+                await cmd_info_ks(transport, crypto, gen=gen)
+
             elif args.command == "gear-info":
                 await cmd_gear_info(transport, crypto, gen=gen)
 
@@ -1391,6 +1537,7 @@ def main():
     sub.add_parser(
         "info", help="Read dashboard info (battery, speed, mileage, versions)"
     )
+    sub.add_parser("info-ks", help="Dashboard for Ninebot KickScooter E/ES/Max")
     sub.add_parser("read-speed", help="Read current speed limit")
 
     sp_set = sub.add_parser("set-speed", help="Set speed limit")
@@ -1521,7 +1668,7 @@ def main():
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
         datefmt="%H:%M:%S",
     )
-
+    logging.getLogger("bleak").setLevel(logging.WARNING)
     if args.command == "scan":
         asyncio.run(do_scan(args.name))
         return
