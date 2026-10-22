@@ -35,34 +35,40 @@ from bleak.backends.device import BLEDevice
 import boards
 from nb_crypto import FW_DATA, NbCrypto, generate_password
 from nb_protocol import (
-    BT_ID,
     BOARD_BLE,
     BOARD_BMS1,
     BOARD_BMS2,
     BOARD_DIS,
     BOARD_MCU,
     BOARD_VCU,
-    set_boards,
+    BT_ID,
     CMD_AUTH,
     CMD_PRE_COMM,
     CMD_READ_RESP,
     CMD_SET_PWD,
     CMD_WRITE_RESP,
+    VALID_SYNC2,
     NbFrame,
     ProtocolGen,
-    VALID_SYNC2,
     build_auth,
     build_close_acc,
     build_open_acc,
     build_open_trunk,
+    build_play_light,
+    build_play_sound,
     build_pre_comm,
     build_read,
     build_read_alarm,
+    build_read_alarm_level,
+    build_read_alarm_volume,
+    build_read_auto_lock,
+    build_read_ave_speed,
     build_read_battery,
     build_read_ble_version,
     build_read_bms1_version,
     build_read_bms_soc,
     build_read_bool,
+    build_read_bool2,
     build_read_cfg_mode,
     build_read_ctl_bool2,
     build_read_cycle_count,
@@ -72,55 +78,49 @@ from nb_protocol import (
     build_read_fun_app_bool,
     build_read_fun_bool,
     build_read_fun_sup_bool,
+    build_read_gear_acc_speed,
+    build_read_gear_data,
+    build_read_gear_top_speed,
     build_read_left_mileage,
     build_read_main_power,
+    build_read_mcu_max_speed,
     build_read_mcu_version,
     build_read_mileage,
     build_read_power,
     build_read_precise_mileage,
     build_read_rated_speed,
     build_read_running_time,
+    build_read_sig_max_speed,
+    build_read_single_mileage,
     build_read_sn,
     build_read_speed,
     build_read_speed_live,
+    build_read_speed_safe_lock,
     build_read_time_full,
     build_read_voltage,
     build_read_warn,
-    build_read_gear_data,
-    build_read_gear_top_speed,
-    build_read_gear_acc_speed,
-    build_read_mcu_max_speed,
-    build_read_speed_safe_lock,
+    build_set_alarm_level,
+    build_set_alarm_volume,
+    build_set_auto_lock,
+    build_set_bool2,
     build_set_cfg_mode,
-    build_set_gear_top_speed,
-    build_set_gear_acc_speed,
     build_set_gear_acc_sens,
-    build_set_gear_tcs,
-    build_set_gear_nitro,
+    build_set_gear_acc_speed,
     build_set_gear_energy,
+    build_set_gear_nitro,
+    build_set_gear_tcs,
+    build_set_gear_top_speed,
     build_set_pwd,
     build_set_speed_safe_lock,
     build_set_warn,
-    build_read_single_mileage,
-    build_read_sig_max_speed,
-    build_read_ave_speed,
-    build_read_alarm_volume,
-    build_set_alarm_volume,
-    build_read_alarm_level,
-    build_set_alarm_level,
-    build_read_auto_lock,
-    build_set_auto_lock,
-    build_read_bool2,
-    build_set_bool2,
-    build_play_sound,
-    build_play_light,
-    pack_warn,
-    warn_volume,
-    warn_preset,
     build_write_nr,
     build_write_speed,
     frame_hex,
+    pack_warn,
     parse_frame,
+    set_boards,
+    warn_preset,
+    warn_volume,
 )
 
 log = logging.getLogger("segway")
@@ -131,13 +131,13 @@ log = logging.getLogger("segway")
 
 # Ninebot Custom (primary — modern devices)
 NB_SERVICE = "6e400001-0000-0000-006e-696e65626f74"
-NB_WRITE   = "6e400002-0000-0000-006e-696e65626f74"
-NB_NOTIFY  = "6e400004-0000-0000-006e-696e65626f74"
+NB_WRITE = "6e400002-0000-0000-006e-696e65626f74"
+NB_NOTIFY = "6e400004-0000-0000-006e-696e65626f74"
 
 # Nordic UART (compatibility fallback)
 NORDIC_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
-NORDIC_WRITE   = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
-NORDIC_NOTIFY  = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+NORDIC_WRITE = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+NORDIC_NOTIFY = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
 # Standard GATT "Device Name" characteristic (0x2A00). On Segway/Ninebot
 # scooters this returns the serial, which is the V2 encryption key (key1).
@@ -150,12 +150,15 @@ GATT_DEVICE_NAME = "00002a00-0000-1000-8000-00805f9b34fb"
 NINEBOT_MFR_IDS = (20034, 20035, 16974, 16975)
 
 # Session file (gitignored — contains passwords and serial numbers)
-SESSION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".segway_session.json")
+SESSION_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), ".segway_session.json"
+)
 
 
 # ---------------------------------------------------------------------------
 # Session persistence
 # ---------------------------------------------------------------------------
+
 
 def load_session(mac: str) -> dict | None:
     """Load stored password for a device MAC."""
@@ -167,8 +170,7 @@ def load_session(mac: str) -> dict | None:
         return None
 
 
-def save_session(mac: str, password: bytes, sn: bytes, bt_name: str,
-                 gen: str = "gen2"):
+def save_session(mac: str, password: bytes, sn: bytes, bt_name: str, gen: str = "gen2"):
     """Store password keyed by device MAC."""
     try:
         with open(SESSION_FILE) as f:
@@ -203,6 +205,7 @@ def clear_session(mac: str):
 # ---------------------------------------------------------------------------
 # BLE transport
 # ---------------------------------------------------------------------------
+
 
 class BleTransport:
     """BLE transport with frame reassembly and async notification queue."""
@@ -272,8 +275,7 @@ class BleTransport:
             mtu_payload = 20  # BLE 4.0 minimum
         for offset in range(0, len(data), mtu_payload):
             chunk = data[offset : offset + mtu_payload]
-            await self.client.write_gatt_char(
-                self.write_uuid, chunk, response=False)
+            await self.client.write_gatt_char(self.write_uuid, chunk, response=False)
             if offset + mtu_payload < len(data):
                 await asyncio.sleep(0.01)  # small gap between fragments
 
@@ -291,10 +293,15 @@ class BleTransport:
 # Handshake
 # ---------------------------------------------------------------------------
 
-async def handshake(transport: BleTransport, crypto: NbCrypto,
-                    bt_name: str, mac: str,
-                    gen: ProtocolGen = ProtocolGen.GEN2,
-                    stored_password: bytes | None = None) -> tuple[bytes, bytes, bytes]:
+
+async def handshake(
+    transport: BleTransport,
+    crypto: NbCrypto,
+    bt_name: str,
+    mac: str,
+    gen: ProtocolGen = ProtocolGen.GEN2,
+    stored_password: bytes | None = None,
+) -> tuple[bytes, bytes, bytes]:
     """
     Complete the 3-phase Encryption2 handshake.
 
@@ -330,7 +337,8 @@ async def handshake(transport: BleTransport, crypto: NbCrypto,
             f"advertised BLE name (it is the encryption key). We used "
             f"'{bt_name}'. Run the 'scan' command and use that name.\n"
             "  • If the name is correct, the scooter likely uses V3Auth "
-            "(newest models such as the E300SE), which is not supported.")
+            "(newest models such as the E300SE), which is not supported."
+        )
 
     resp = parse_frame(resp_plain)
     if resp is None or resp.cmd != CMD_PRE_COMM:
@@ -435,8 +443,10 @@ async def handshake(transport: BleTransport, crypto: NbCrypto,
 # Commands
 # ---------------------------------------------------------------------------
 
-async def cmd_read_speed(transport: BleTransport, crypto: NbCrypto,
-                         gen: ProtocolGen = ProtocolGen.GEN2) -> int:
+
+async def cmd_read_speed(
+    transport: BleTransport, crypto: NbCrypto, gen: ProtocolGen = ProtocolGen.GEN2
+) -> int:
     """Read the current speed limit."""
     frame = build_read_speed(gen=gen)
     encrypted = crypto.encrypt(frame)
@@ -454,11 +464,17 @@ async def cmd_read_speed(transport: BleTransport, crypto: NbCrypto,
         speed = struct.unpack("<H", resp.data[:2])[0]
         return speed
     else:
-        raise RuntimeError(f"Unexpected response: cmd=0x{resp.cmd:02X}, data={resp.data.hex()}")
+        raise RuntimeError(
+            f"Unexpected response: cmd=0x{resp.cmd:02X}, data={resp.data.hex()}"
+        )
 
 
-async def cmd_set_speed(transport: BleTransport, crypto: NbCrypto, speed: int,
-                        gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_set_speed(
+    transport: BleTransport,
+    crypto: NbCrypto,
+    speed: int,
+    gen: ProtocolGen = ProtocolGen.GEN2,
+):
     """Write a new speed limit (WRITE_NR — no response expected)."""
     frame = build_write_speed(speed, gen=gen)
     encrypted = crypto.encrypt(frame)
@@ -470,14 +486,19 @@ async def cmd_set_speed(transport: BleTransport, crypto: NbCrypto, speed: int,
         resp_plain, rc = crypto.decrypt(resp_enc)
         resp = parse_frame(resp_plain)
         if resp:
-            log.info("Got response: cmd=0x%02X index=0x%02X data=%s",
-                     resp.cmd, resp.index, resp.data.hex())
+            log.info(
+                "Got response: cmd=0x%02X index=0x%02X data=%s",
+                resp.cmd,
+                resp.index,
+                resp.data.hex(),
+            )
     except TimeoutError:
         pass  # Expected for WRITE_NR
 
 
-async def send_and_recv(transport: BleTransport, crypto: NbCrypto,
-                        frame: bytes, timeout: float = 5.0) -> NbFrame | None:
+async def send_and_recv(
+    transport: BleTransport, crypto: NbCrypto, frame: bytes, timeout: float = 5.0
+) -> NbFrame | None:
     """Encrypt, send a frame and return the parsed decrypted response."""
     encrypted = crypto.encrypt(frame)
     await transport.send(encrypted)
@@ -488,8 +509,9 @@ async def send_and_recv(transport: BleTransport, crypto: NbCrypto,
     return parse_frame(resp_plain)
 
 
-async def read_register_u16(transport: BleTransport, crypto: NbCrypto,
-                            frame: bytes) -> int | None:
+async def read_register_u16(
+    transport: BleTransport, crypto: NbCrypto, frame: bytes
+) -> int | None:
     """Send a READ, return the 2-byte LE response as int."""
     resp = await send_and_recv(transport, crypto, frame)
     if resp and resp.cmd == CMD_READ_RESP and len(resp.data) >= 2:
@@ -497,8 +519,9 @@ async def read_register_u16(transport: BleTransport, crypto: NbCrypto,
     return None
 
 
-async def read_register_u32(transport: BleTransport, crypto: NbCrypto,
-                            frame: bytes) -> int | None:
+async def read_register_u32(
+    transport: BleTransport, crypto: NbCrypto, frame: bytes
+) -> int | None:
     """Send a READ, return the 4-byte LE response as int."""
     resp = await send_and_recv(transport, crypto, frame)
     if resp and resp.cmd == CMD_READ_RESP and len(resp.data) >= 4:
@@ -506,8 +529,9 @@ async def read_register_u32(transport: BleTransport, crypto: NbCrypto,
     return None
 
 
-async def read_register_bytes(transport: BleTransport, crypto: NbCrypto,
-                              frame: bytes) -> bytes | None:
+async def read_register_bytes(
+    transport: BleTransport, crypto: NbCrypto, frame: bytes
+) -> bytes | None:
     """Send a READ, return the raw response data."""
     resp = await send_and_recv(transport, crypto, frame)
     if resp and resp.cmd == CMD_READ_RESP:
@@ -522,8 +546,9 @@ def fmt_version(v: int | None) -> str:
     return f"{(v >> 8) & 0xFF}.{(v >> 4) & 0xF}.{v & 0xF}"
 
 
-async def cmd_info(transport: BleTransport, crypto: NbCrypto,
-                   gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_info(
+    transport: BleTransport, crypto: NbCrypto, gen: ProtocolGen = ProtocolGen.GEN2
+):
     """
     Read dashboard info — matches the exact capture sequence.
 
@@ -568,10 +593,14 @@ async def cmd_info(transport: BleTransport, crypto: NbCrypto,
     fun_sup = await safe_bytes(build_read_fun_sup_bool(gen=g), "funSup")
     fun_bool = await safe_u16(build_read_fun_bool(gen=g), "funBool")
     sn_data = await safe_bytes(build_read_sn(gen=g), "sn")
-    sn_str = sn_data.decode("ascii", errors="replace").rstrip("\x00") if sn_data else "?"
+    sn_str = (
+        sn_data.decode("ascii", errors="replace").rstrip("\x00") if sn_data else "?"
+    )
     rbool = await safe_u16(build_read_bool(gen=g), "rBool")
     ecu_pn = await safe_bytes(build_read_ecu_pn(gen=g), "ecuPN")
-    ecu_pn_str = ecu_pn.decode("ascii", errors="replace").rstrip("\x00") if ecu_pn else "?"
+    ecu_pn_str = (
+        ecu_pn.decode("ascii", errors="replace").rstrip("\x00") if ecu_pn else "?"
+    )
 
     # ── Polling loop reads (capture frames 18+) ──
     alarm = await safe_u16(build_read_alarm(gen=g), "alarm")
@@ -670,25 +699,40 @@ async def cmd_info(transport: BleTransport, crypto: NbCrypto,
     print(f"FunAppBool2:    {h(fun_app2)} (bit 1=TCS available)")
     print(f"CTLBool2:       {h(ctl_bool2)} (bit 10=ele brake rev, bit 13=TCS rev)")
     print(f"FunSupBool:     {fun_sup.hex() if fun_sup else '?'}")
-    print(f"Versions:       DIS={fmt_version(dis_ver)}  MCU={fmt_version(mcu_ver)}  "
-          f"BLE={fmt_version(ble_ver)}  ECU={fmt_version(ecu_ver)}  BMS={fmt_version(bms_ver)}")
+    print(
+        f"Versions:       DIS={fmt_version(dis_ver)}  MCU={fmt_version(mcu_ver)}  "
+        f"BLE={fmt_version(ble_ver)}  ECU={fmt_version(ecu_ver)}  BMS={fmt_version(bms_ver)}"
+    )
 
 
-async def cmd_set_sound(transport: BleTransport, crypto: NbCrypto,
-                        value: int, gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_set_sound(
+    transport: BleTransport,
+    crypto: NbCrypto,
+    value: int,
+    gen: ProtocolGen = ProtocolGen.GEN2,
+):
     """Set rWarn (DIS:0x75) as a raw u16 value. Low byte=volume, high byte=preset."""
     frame = build_set_warn(value, gen=gen)
     encrypted = crypto.encrypt(frame)
     await transport.send(encrypted)
-    log.info("Set rWarn: %d (0x%04X) — volume=%d preset=%d",
-             value, value, warn_volume(value), warn_preset(value))
+    log.info(
+        "Set rWarn: %d (0x%04X) — volume=%d preset=%d",
+        value,
+        value,
+        warn_volume(value),
+        warn_preset(value),
+    )
     try:
         resp_enc = await transport.recv(timeout=2.0)
         resp_plain, rc = crypto.decrypt(resp_enc)
         resp = parse_frame(resp_plain)
         if resp:
-            log.info("Got response: cmd=0x%02X index=0x%02X data=%s",
-                     resp.cmd, resp.index, resp.data.hex())
+            log.info(
+                "Got response: cmd=0x%02X index=0x%02X data=%s",
+                resp.cmd,
+                resp.index,
+                resp.data.hex(),
+            )
     except TimeoutError:
         pass
 
@@ -697,25 +741,32 @@ async def cmd_set_sound(transport: BleTransport, crypto: NbCrypto,
 # New one-shot actions + settings — matching Flutter app findings
 # ---------------------------------------------------------------------------
 
-async def cmd_honk(transport: BleTransport, crypto: NbCrypto,
-                   gen: ProtocolGen = ProtocolGen.GEN2):
+
+async def cmd_honk(
+    transport: BleTransport, crypto: NbCrypto, gen: ProtocolGen = ProtocolGen.GEN2
+):
     """Play alarm sound + flash lights (spec: playSound, DIS cmd 0x11)."""
     frame = build_play_sound(gen=gen)
     await transport.send(crypto.encrypt(frame))
     log.info("Honk + flash sent")
 
 
-async def cmd_flash(transport: BleTransport, crypto: NbCrypto,
-                    gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_flash(
+    transport: BleTransport, crypto: NbCrypto, gen: ProtocolGen = ProtocolGen.GEN2
+):
     """Flash lights only (spec: playLight, HEP cmd 0x11 index 1)."""
     frame = build_play_light(gen=gen)
     await transport.send(crypto.encrypt(frame))
     log.info("Flash lights sent")
 
 
-async def cmd_set_warn_split(transport: BleTransport, crypto: NbCrypto,
-                             volume: int, preset: int,
-                             gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_set_warn_split(
+    transport: BleTransport,
+    crypto: NbCrypto,
+    volume: int,
+    preset: int,
+    gen: ProtocolGen = ProtocolGen.GEN2,
+):
     """Set rWarn via volume (0-100) + preset (0-2) fields."""
     if not (0 <= volume <= 100):
         raise ValueError(f"volume must be 0-100, got {volume}")
@@ -724,12 +775,17 @@ async def cmd_set_warn_split(transport: BleTransport, crypto: NbCrypto,
     value = pack_warn(volume=volume, preset=preset)
     frame = build_set_warn(value, gen=gen)
     await transport.send(crypto.encrypt(frame))
-    log.info("Set rWarn: volume=%d preset=Sound%d (raw=0x%04X)",
-             volume, preset + 1, value)
+    log.info(
+        "Set rWarn: volume=%d preset=Sound%d (raw=0x%04X)", volume, preset + 1, value
+    )
 
 
-async def cmd_set_alarm_level(transport: BleTransport, crypto: NbCrypto,
-                              level: int, gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_set_alarm_level(
+    transport: BleTransport,
+    crypto: NbCrypto,
+    level: int,
+    gen: ProtocolGen = ProtocolGen.GEN2,
+):
     """Set alarm sensitivity (DIS 0x77). 1=Sensitive, 2=High, 3=Standard, 4=Low."""
     if level not in (1, 2, 3, 4):
         raise ValueError(f"alarm level must be 1-4, got {level}")
@@ -739,8 +795,12 @@ async def cmd_set_alarm_level(transport: BleTransport, crypto: NbCrypto,
     log.info("Set alarm sensitivity: %s (level=%d)", names[level], level)
 
 
-async def cmd_set_alarm_volume(transport: BleTransport, crypto: NbCrypto,
-                               volume: int, gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_set_alarm_volume(
+    transport: BleTransport,
+    crypto: NbCrypto,
+    volume: int,
+    gen: ProtocolGen = ProtocolGen.GEN2,
+):
     """Set alarm volume (DIS 0x76, 0-100)."""
     if not (0 <= volume <= 100):
         raise ValueError(f"volume must be 0-100, got {volume}")
@@ -749,8 +809,12 @@ async def cmd_set_alarm_volume(transport: BleTransport, crypto: NbCrypto,
     log.info("Set alarm volume: %d", volume)
 
 
-async def cmd_set_auto_lock(transport: BleTransport, crypto: NbCrypto,
-                            seconds: int, gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_set_auto_lock(
+    transport: BleTransport,
+    crypto: NbCrypto,
+    seconds: int,
+    gen: ProtocolGen = ProtocolGen.GEN2,
+):
     """Set auto-lock timer seconds (DIS 0x85)."""
     frame = build_set_auto_lock(seconds, gen=gen)
     await transport.send(crypto.encrypt(frame))
@@ -767,8 +831,12 @@ _MODE_BITS = {
 }
 
 
-async def cmd_set_mode(transport: BleTransport, crypto: NbCrypto,
-                       mode: str, gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_set_mode(
+    transport: BleTransport,
+    crypto: NbCrypto,
+    mode: str,
+    gen: ProtocolGen = ProtocolGen.GEN2,
+):
     """Switch active riding mode by name (eco/coast/furious/m1/m2)."""
     key = mode.lower()
     if key not in _MODE_BITS:
@@ -779,14 +847,21 @@ async def cmd_set_mode(transport: BleTransport, crypto: NbCrypto,
     log.info("Set riding mode: %s (rBool2=0x%04X)", key, mask)
 
 
-async def cmd_read_reg(transport: BleTransport, crypto: NbCrypto,
-                       target: int, register: int, length: int,
-                       gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_read_reg(
+    transport: BleTransport,
+    crypto: NbCrypto,
+    target: int,
+    register: int,
+    length: int,
+    gen: ProtocolGen = ProtocolGen.GEN2,
+):
     """Read an arbitrary register (generic)."""
     frame = build_read(target, register, length, gen=gen)
     resp = await send_and_recv(transport, crypto, frame)
     if resp and resp.cmd == CMD_READ_RESP:
-        print(f"[0x{target:02X}:0x{register:02X}] ({length}B) = {resp.data.hex()}", end="")
+        print(
+            f"[0x{target:02X}:0x{register:02X}] ({length}B) = {resp.data.hex()}", end=""
+        )
         if len(resp.data) == 2:
             val = struct.unpack("<H", resp.data[:2])[0]
             print(f"  ({val})", end="")
@@ -798,9 +873,14 @@ async def cmd_read_reg(transport: BleTransport, crypto: NbCrypto,
         print(f"[0x{target:02X}:0x{register:02X}] No READ_RSP (got: {resp})")
 
 
-async def cmd_write_reg(transport: BleTransport, crypto: NbCrypto,
-                        target: int, register: int, data_hex: str,
-                        gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_write_reg(
+    transport: BleTransport,
+    crypto: NbCrypto,
+    target: int,
+    register: int,
+    data_hex: str,
+    gen: ProtocolGen = ProtocolGen.GEN2,
+):
     """Write an arbitrary register (generic WRITE_NR)."""
     data = bytes.fromhex(data_hex)
     frame = build_write_nr(target, register, data, gen=gen)
@@ -812,25 +892,38 @@ async def cmd_write_reg(transport: BleTransport, crypto: NbCrypto,
         resp_plain, rc = crypto.decrypt(resp_enc)
         resp = parse_frame(resp_plain)
         if resp:
-            print(f"  Response: cmd=0x{resp.cmd:02X} index=0x{resp.index:02X} data={resp.data.hex()}")
+            print(
+                f"  Response: cmd=0x{resp.cmd:02X} index=0x{resp.index:02X} data={resp.data.hex()}"
+            )
     except TimeoutError:
         pass
 
 
-async def cmd_gear_info(transport: BleTransport, crypto: NbCrypto,
-                        gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_gear_info(
+    transport: BleTransport, crypto: NbCrypto, gen: ProtocolGen = ProtocolGen.GEN2
+):
     """Read all gear/speed-related registers."""
     g = gen
-    mcu_max = await read_register_u16(transport, crypto, build_read_mcu_max_speed(gen=g))
-    top_spd = await read_register_u16(transport, crypto, build_read_gear_top_speed(gen=g))
-    acc_spd = await read_register_u16(transport, crypto, build_read_gear_acc_speed(gen=g))
-    safe_lock = await read_register_u16(transport, crypto, build_read_speed_safe_lock(gen=g))
+    mcu_max = await read_register_u16(
+        transport, crypto, build_read_mcu_max_speed(gen=g)
+    )
+    top_spd = await read_register_u16(
+        transport, crypto, build_read_gear_top_speed(gen=g)
+    )
+    acc_spd = await read_register_u16(
+        transport, crypto, build_read_gear_acc_speed(gen=g)
+    )
+    safe_lock = await read_register_u16(
+        transport, crypto, build_read_speed_safe_lock(gen=g)
+    )
     spd_lim = await read_register_u16(transport, crypto, build_read_speed(gen=g))
     rated = await read_register_u16(transport, crypto, build_read_rated_speed(gen=g))
     cfg_mode = await read_register_u16(transport, crypto, build_read_cfg_mode(gen=g))
 
     # Read full gear profile
-    gear_data = await read_register_bytes(transport, crypto, build_read_gear_data(1, gen=g))
+    gear_data = await read_register_bytes(
+        transport, crypto, build_read_gear_data(1, gen=g)
+    )
 
     def v(x, unit=""):
         return f"{x}{unit}" if x is not None else "?"
@@ -864,9 +957,13 @@ async def cmd_gear_info(transport: BleTransport, crypto: NbCrypto,
         print(f"\nGear profile 1 ({len(gear_data)}B): {gear_data.hex()}")
 
 
-async def cmd_set_gear(transport: BleTransport, crypto: NbCrypto,
-                       param: str, value: int,
-                       gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_set_gear(
+    transport: BleTransport,
+    crypto: NbCrypto,
+    param: str,
+    value: int,
+    gen: ProtocolGen = ProtocolGen.GEN2,
+):
     """Set a gear parameter."""
     builders = {
         "top-speed": (build_set_gear_top_speed, "Gear top speed"),
@@ -890,15 +987,23 @@ async def cmd_set_gear(transport: BleTransport, crypto: NbCrypto,
         resp_plain, rc = crypto.decrypt(resp_enc)
         resp = parse_frame(resp_plain)
         if resp:
-            log.info("Got response: cmd=0x%02X index=0x%02X data=%s",
-                     resp.cmd, resp.index, resp.data.hex())
+            log.info(
+                "Got response: cmd=0x%02X index=0x%02X data=%s",
+                resp.cmd,
+                resp.index,
+                resp.data.hex(),
+            )
     except TimeoutError:
         pass
 
 
-async def cmd_vehicle_action(transport: BleTransport, crypto: NbCrypto,
-                             action: str, ident: bytes,
-                             gen: ProtocolGen = ProtocolGen.GEN2):
+async def cmd_vehicle_action(
+    transport: BleTransport,
+    crypto: NbCrypto,
+    action: str,
+    ident: bytes,
+    gen: ProtocolGen = ProtocolGen.GEN2,
+):
     """Send a vehicle action command (power-on, power-off, open-seat)."""
     builders = {
         "power-on": build_open_acc,
@@ -916,8 +1021,12 @@ async def cmd_vehicle_action(transport: BleTransport, crypto: NbCrypto,
         resp_plain, rc = crypto.decrypt(resp_enc)
         resp = parse_frame(resp_plain)
         if resp:
-            log.info("Got response: cmd=0x%02X index=0x%02X data=%s",
-                     resp.cmd, resp.index, resp.data.hex())
+            log.info(
+                "Got response: cmd=0x%02X index=0x%02X data=%s",
+                resp.cmd,
+                resp.index,
+                resp.data.hex(),
+            )
     except TimeoutError:
         pass  # Expected for WRITE_NR
 
@@ -925,6 +1034,7 @@ async def cmd_vehicle_action(transport: BleTransport, crypto: NbCrypto,
 # ---------------------------------------------------------------------------
 # Scan
 # ---------------------------------------------------------------------------
+
 
 def detect_auth_version(manufacturer_data: dict[int, bytes] | None) -> int | None:
     """
@@ -945,8 +1055,9 @@ def detect_auth_version(manufacturer_data: dict[int, bytes] | None) -> int | Non
 
 
 def _auth_tag(ver: int | None) -> str:
-    return {2: "authV2 (supported)",
-            3: "authV3 (NOT supported)"}.get(ver, "auth=? (unknown)")
+    return {2: "authV2 (supported)", 3: "authV3 (NOT supported)"}.get(
+        ver, "auth=? (unknown)"
+    )
 
 
 async def read_device_name(client: BleakClient) -> str | None:
@@ -969,8 +1080,9 @@ async def do_scan(name_filter: str | None = None):
     for d, adv in discovered.values():
         name = d.name or (adv.local_name if adv else "") or ""
         mfr = (adv.manufacturer_data if adv else None) or {}
-        is_ninebot = (any(x in name.upper() for x in ["S1D", "NINEBOT", "SEGWAY", "NB-"])
-                      or any(cid in NINEBOT_MFR_IDS for cid in mfr))
+        is_ninebot = any(
+            x in name.upper() for x in ["S1D", "NINEBOT", "SEGWAY", "NB-"]
+        ) or any(cid in NINEBOT_MFR_IDS for cid in mfr)
         if name_filter and name_filter.lower() not in name.lower():
             continue
         if is_ninebot:
@@ -978,13 +1090,18 @@ async def do_scan(name_filter: str | None = None):
             # (V2 key) and may come from adv.local_name when d.name is None.
             found.append((d, name))
             rssi = adv.rssi if adv else "?"
-            print(f"  [{rssi:>4} dBm] {d.address}  {name or '(unknown)'}  "
-                  f"[{_auth_tag(detect_auth_version(mfr))}]")
+            print(
+                f"  [{rssi:>4} dBm] {d.address}  {name or '(unknown)'}  "
+                f"[{_auth_tag(detect_auth_version(mfr))}]"
+            )
 
     if not found:
         print("\nNo matching devices found. Showing all nearby devices:")
-        ranked = sorted(discovered.values(),
-                        key=lambda da: da[1].rssi if da[1] else -999, reverse=True)
+        ranked = sorted(
+            discovered.values(),
+            key=lambda da: da[1].rssi if da[1] else -999,
+            reverse=True,
+        )
         for d, adv in ranked[:20]:
             name = d.name or (adv.local_name if adv else "") or "(unknown)"
             rssi = adv.rssi if adv else "?"
@@ -997,8 +1114,10 @@ async def do_scan(name_filter: str | None = None):
 # Connect & discover services
 # ---------------------------------------------------------------------------
 
-async def find_characteristics(client: BleakClient,
-                               gen: ProtocolGen = ProtocolGen.GEN2) -> tuple[str, str]:
+
+async def find_characteristics(
+    client: BleakClient, gen: ProtocolGen = ProtocolGen.GEN2
+) -> tuple[str, str]:
     """
     Discover write and notify characteristic UUIDs.
     Gen2 prefers Nordic UART, Gen3 prefers Ninebot Custom.
@@ -1017,11 +1136,15 @@ async def find_characteristics(client: BleakClient,
 
     # Gen2 prefers Nordic UART; Gen3 prefers Ninebot Custom
     if gen == ProtocolGen.GEN2:
-        order = [(has_nordic, "Nordic UART", NORDIC_WRITE, NORDIC_NOTIFY),
-                 (has_nb, "Ninebot Custom", NB_WRITE, NB_NOTIFY)]
+        order = [
+            (has_nordic, "Nordic UART", NORDIC_WRITE, NORDIC_NOTIFY),
+            (has_nb, "Ninebot Custom", NB_WRITE, NB_NOTIFY),
+        ]
     else:
-        order = [(has_nb, "Ninebot Custom", NB_WRITE, NB_NOTIFY),
-                 (has_nordic, "Nordic UART", NORDIC_WRITE, NORDIC_NOTIFY)]
+        order = [
+            (has_nb, "Ninebot Custom", NB_WRITE, NB_NOTIFY),
+            (has_nordic, "Nordic UART", NORDIC_WRITE, NORDIC_NOTIFY),
+        ]
 
     for found, name, write_uuid, notify_uuid in order:
         if found:
@@ -1039,17 +1162,24 @@ async def find_characteristics(client: BleakClient,
                 if "notify" in char.properties:
                     notify_char = char.uuid
             if write_char and notify_char:
-                log.info("Found service %s (write=%s, notify=%s)",
-                         svc.uuid, write_char, notify_char)
+                log.info(
+                    "Found service %s (write=%s, notify=%s)",
+                    svc.uuid,
+                    write_char,
+                    notify_char,
+                )
                 return write_char, notify_char
 
-    raise RuntimeError("No compatible BLE service found. Available services: " +
-                       ", ".join(svc.uuid for svc in services))
+    raise RuntimeError(
+        "No compatible BLE service found. Available services: "
+        + ", ".join(svc.uuid for svc in services)
+    )
 
 
 # ---------------------------------------------------------------------------
 # Main flow
 # ---------------------------------------------------------------------------
+
 
 async def connect_and_run(args):
     """Connect to device and execute the requested command."""
@@ -1072,8 +1202,10 @@ async def connect_and_run(args):
         set_boards(roles)
         print(f"Device profile: {boards.describe(entry, roles)}")
     else:
-        print("Device profile: default Segway E125S layout — for other models pass "
-              "--device <model|hw-id> (e.g. --device gt3). See --list-devices.")
+        print(
+            "Device profile: default Segway E125S layout — for other models pass "
+            "--device <model|hw-id> (e.g. --device gt3). See --list-devices."
+        )
 
     print(f"Connecting to {address} ({gen.value})...")
     async with BleakClient(address, timeout=15.0) as client:
@@ -1087,8 +1219,10 @@ async def connect_and_run(args):
             if bt_name:
                 print(f"Device name (encryption key): {bt_name}")
         if not bt_name:
-            print("Error: could not read the device name. Pass --name <serial> "
-                  "(the scooter's exact advertised name; see 'scan').")
+            print(
+                "Error: could not read the device name. Pass --name <serial> "
+                "(the scooter's exact advertised name; see 'scan')."
+            )
             return
 
         write_uuid, notify_uuid = await find_characteristics(client, gen=gen)
@@ -1102,8 +1236,8 @@ async def connect_and_run(args):
         try:
             # Handshake
             password, auth, sn = await handshake(
-                transport, crypto, bt_name, mac, gen=gen,
-                stored_password=stored_pwd)
+                transport, crypto, bt_name, mac, gen=gen, stored_password=stored_pwd
+            )
             sn_str = sn.decode("ascii", errors="replace")
             print(f"Authenticated! SN: {sn_str}")
 
@@ -1139,8 +1273,7 @@ async def connect_and_run(args):
                 await cmd_gear_info(transport, crypto, gen=gen)
 
             elif args.command == "set-gear":
-                await cmd_set_gear(transport, crypto,
-                                   args.param, args.value, gen=gen)
+                await cmd_set_gear(transport, crypto, args.param, args.value, gen=gen)
                 print(f"Gear param '{args.param}' set to {args.value}")
 
             elif args.command == "set-sound":
@@ -1148,17 +1281,20 @@ async def connect_and_run(args):
                 print(f"Sound preset set to {args.value}")
 
             elif args.command == "read-reg":
-                await cmd_read_reg(transport, crypto,
-                                   args.target, args.register, args.length, gen=gen)
+                await cmd_read_reg(
+                    transport, crypto, args.target, args.register, args.length, gen=gen
+                )
 
             elif args.command == "write-reg":
-                await cmd_write_reg(transport, crypto,
-                                    args.target, args.register, args.data, gen=gen)
+                await cmd_write_reg(
+                    transport, crypto, args.target, args.register, args.data, gen=gen
+                )
 
             elif args.command in ("power-on", "power-off", "open-seat"):
                 ident = bytes.fromhex(args.ident)
                 await cmd_vehicle_action(
-                    transport, crypto, args.command, ident, gen=gen)
+                    transport, crypto, args.command, ident, gen=gen
+                )
                 print(f"Vehicle action '{args.command}' sent.")
 
             elif args.command == "honk":
@@ -1170,8 +1306,9 @@ async def connect_and_run(args):
                 print("Flash lights sent.")
 
             elif args.command == "set-warn":
-                await cmd_set_warn_split(transport, crypto,
-                                         args.volume, args.preset, gen=gen)
+                await cmd_set_warn_split(
+                    transport, crypto, args.volume, args.preset, gen=gen
+                )
                 print(f"rWarn set: volume={args.volume}, preset=Sound{args.preset + 1}")
 
             elif args.command == "set-alarm-volume":
@@ -1202,62 +1339,105 @@ def main():
         description="Segway/Ninebot BLE Client (Gen2 + Gen3)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("-v", "--verbose", action="store_true",
-                        help="Enable verbose logging")
-    parser.add_argument("-n", "--name", default=None,
-                        help="BLE device name = the scooter's serial (the V2 "
-                             "encryption key). Optional: if omitted it is read "
-                             "from the device's GATT Device Name (0x2A00).")
-    parser.add_argument("-a", "--address", default=None,
-                        help="BLE device MAC address (skip scan)")
-    parser.add_argument("-g", "--gen", default="gen2", choices=["gen2", "gen3"],
-                        help="Protocol generation (default: gen2)")
-    parser.add_argument("-d", "--device", default=None,
-                        help="Device model for board addressing — name/slug or hardware "
-                             "id (e.g. 'gt3', 'segway-superscooter-gt3', '257'). "
-                             "Default is the E125S layout; see --list-devices.")
-    parser.add_argument("--list-devices", action="store_true",
-                        help="List known device board profiles and exit")
-    parser.add_argument("--ident", default=None,
-                        help="Vehicle ident hex string for power-on/off/open-seat")
-    parser.add_argument("--password", default=None,
-                        help="Stored password hex (from iPhone backup {SN}_decrypt)")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable verbose logging"
+    )
+    parser.add_argument(
+        "-n",
+        "--name",
+        default=None,
+        help="BLE device name = the scooter's serial (the V2 "
+        "encryption key). Optional: if omitted it is read "
+        "from the device's GATT Device Name (0x2A00).",
+    )
+    parser.add_argument(
+        "-a", "--address", default=None, help="BLE device MAC address (skip scan)"
+    )
+    parser.add_argument(
+        "-g",
+        "--gen",
+        default="gen2",
+        choices=["gen2", "gen3"],
+        help="Protocol generation (default: gen2)",
+    )
+    parser.add_argument(
+        "-d",
+        "--device",
+        default=None,
+        help="Device model for board addressing — name/slug or hardware "
+        "id (e.g. 'gt3', 'segway-superscooter-gt3', '257'). "
+        "Default is the E125S layout; see --list-devices.",
+    )
+    parser.add_argument(
+        "--list-devices",
+        action="store_true",
+        help="List known device board profiles and exit",
+    )
+    parser.add_argument(
+        "--ident",
+        default=None,
+        help="Vehicle ident hex string for power-on/off/open-seat",
+    )
+    parser.add_argument(
+        "--password",
+        default=None,
+        help="Stored password hex (from iPhone backup {SN}_decrypt)",
+    )
 
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("scan", help="Scan for Segway BLE devices")
     sub.add_parser("handshake", help="Connect and authenticate only")
-    sub.add_parser("info", help="Read dashboard info (battery, speed, mileage, versions)")
+    sub.add_parser(
+        "info", help="Read dashboard info (battery, speed, mileage, versions)"
+    )
     sub.add_parser("read-speed", help="Read current speed limit")
 
     sp_set = sub.add_parser("set-speed", help="Set speed limit")
     sp_set.add_argument("speed", type=int, help="Speed in km/h (e.g., 25, 45, 60)")
 
     sp_sound = sub.add_parser("set-sound", help="Set warning sound preset (DIS:0x75)")
-    sp_sound.add_argument("value", type=int,
-                          help="Sound value (lower byte=volume, bit 8=preset toggle)")
+    sp_sound.add_argument(
+        "value", type=int, help="Sound value (lower byte=volume, bit 8=preset toggle)"
+    )
 
     sub.add_parser("gear-info", help="Read all gear/speed-related registers")
 
     sp_gear = sub.add_parser("set-gear", help="Set gear parameter")
-    sp_gear.add_argument("param", choices=[
-        "top-speed", "acc-speed", "acc-sens", "tcs", "nitro", "energy", "safe-lock",
-    ])
+    sp_gear.add_argument(
+        "param",
+        choices=[
+            "top-speed",
+            "acc-speed",
+            "acc-sens",
+            "tcs",
+            "nitro",
+            "energy",
+            "safe-lock",
+        ],
+    )
     sp_gear.add_argument("value", type=int, help="Value to set")
 
     sp_rreg = sub.add_parser("read-reg", help="Read arbitrary register")
-    sp_rreg.add_argument("target", type=lambda x: int(x, 0),
-                         help="Target board (e.g., 0x01=DIS, 0x04=BLE, 0x09=VCU)")
-    sp_rreg.add_argument("register", type=lambda x: int(x, 0),
-                         help="Register index (e.g., 0xB5)")
-    sp_rreg.add_argument("-l", "--length", type=int, default=2,
-                         help="Read length in bytes (default: 2)")
+    sp_rreg.add_argument(
+        "target",
+        type=lambda x: int(x, 0),
+        help="Target board (e.g., 0x01=DIS, 0x04=BLE, 0x09=VCU)",
+    )
+    sp_rreg.add_argument(
+        "register", type=lambda x: int(x, 0), help="Register index (e.g., 0xB5)"
+    )
+    sp_rreg.add_argument(
+        "-l", "--length", type=int, default=2, help="Read length in bytes (default: 2)"
+    )
 
     sp_wreg = sub.add_parser("write-reg", help="Write arbitrary register (WRITE_NR)")
-    sp_wreg.add_argument("target", type=lambda x: int(x, 0),
-                         help="Target board (e.g., 0x01=DIS)")
-    sp_wreg.add_argument("register", type=lambda x: int(x, 0),
-                         help="Register index (e.g., 0x75)")
+    sp_wreg.add_argument(
+        "target", type=lambda x: int(x, 0), help="Target board (e.g., 0x01=DIS)"
+    )
+    sp_wreg.add_argument(
+        "register", type=lambda x: int(x, 0), help="Register index (e.g., 0x75)"
+    )
     sp_wreg.add_argument("data", help="Data as hex string (e.g., 1400)")
 
     sub.add_parser("power-on", help="Power on / open accelerator (requires --ident)")
@@ -1269,37 +1449,51 @@ def main():
     sub.add_parser("flash", help="Flash lights only (playLight)")
 
     # Audio settings
-    sp_warn = sub.add_parser("set-warn",
-                             help="Set rWarn (DIS 0x75) via volume + preset fields")
+    sp_warn = sub.add_parser(
+        "set-warn", help="Set rWarn (DIS 0x75) via volume + preset fields"
+    )
     sp_warn.add_argument("volume", type=int, help="Prompt volume 0-100")
-    sp_warn.add_argument("preset", type=int, choices=[0, 1, 2],
-                         help="Sound preset: 0=Sound1, 1=Sound2, 2=Sound3")
+    sp_warn.add_argument(
+        "preset",
+        type=int,
+        choices=[0, 1, 2],
+        help="Sound preset: 0=Sound1, 1=Sound2, 2=Sound3",
+    )
 
     sp_alvol = sub.add_parser("set-alarm-volume", help="Set alarm volume (DIS 0x76)")
     sp_alvol.add_argument("volume", type=int, help="0-100")
 
-    sp_allvl = sub.add_parser("set-alarm-level",
-                              help="Set alarm sensitivity (DIS 0x77)")
-    sp_allvl.add_argument("level", type=int, choices=[1, 2, 3, 4],
-                          help="1=Sensitive, 2=High, 3=Standard, 4=Low")
+    sp_allvl = sub.add_parser(
+        "set-alarm-level", help="Set alarm sensitivity (DIS 0x77)"
+    )
+    sp_allvl.add_argument(
+        "level",
+        type=int,
+        choices=[1, 2, 3, 4],
+        help="1=Sensitive, 2=High, 3=Standard, 4=Low",
+    )
 
     # Locks
-    sp_auto = sub.add_parser("set-auto-lock",
-                             help="Set auto-lock timeout seconds (DIS 0x85)")
+    sp_auto = sub.add_parser(
+        "set-auto-lock", help="Set auto-lock timeout seconds (DIS 0x85)"
+    )
     sp_auto.add_argument("seconds", type=int, help="Seconds (0=off)")
 
     # Riding modes
-    sp_mode = sub.add_parser("set-mode",
-                             help="Switch active riding mode (rBool2 DIS 0xAA)")
-    sp_mode.add_argument("mode",
-                         choices=["eco", "coast", "furious", "m1", "m2"])
+    sp_mode = sub.add_parser(
+        "set-mode", help="Switch active riding mode (rBool2 DIS 0xAA)"
+    )
+    sp_mode.add_argument("mode", choices=["eco", "coast", "furious", "m1", "m2"])
 
     args = parser.parse_args()
 
     if args.list_devices:
         devs = boards.load_boards()
         print(f"{len(devs)} device profiles (pass to --device by slug or hw-id):\n")
-        for hw, d in sorted(devs.items(), key=lambda kv: (kv[1].get("model") or "", kv[1].get("name") or "")):
+        for hw, d in sorted(
+            devs.items(),
+            key=lambda kv: (kv[1].get("model") or "", kv[1].get("name") or ""),
+        ):
             vc = boards.resolve_roles(d["modules"]).get("vcu")
             vcs = f"vcu→0x{vc:02X}" if vc is not None else "vcu→?"
             print(f"  {(d.get('slug') or ''):44} hw={hw:>6}  {vcs:12} {d.get('name')}")
